@@ -1,0 +1,80 @@
+name: Build iOS App and Widget IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Xcode version
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '15.4'
+
+      - name: Create Xcode Project Structure
+        run: |
+          mkdir -p ScheduleAppIOS/ScheduleAppIOS
+          cp ScheduleApp.swift ScheduleAppIOS/ScheduleAppIOS/ScheduleApp.swift
+          
+          # Generate minimalist Info.plist
+          cat << 'EOF' > ScheduleAppIOS/ScheduleAppIOS/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleIdentifier</key>
+              <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+              <key>CFBundleName</key>
+              <string>ScheduleApp</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0</string>
+              <key>CFBundleVersion</key>
+              <string>1</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>UILaunchStoryboardName</key>
+              <string>LaunchScreen</string>
+              <key>UIRequiredDeviceCapabilities</key>
+              <array>
+                  <string>arm64</string>
+              </array>
+              <key>UISupportedInterfaceOrientations</key>
+              <array>
+                  <string>UIInterfaceOrientationPortrait</string>
+              </array>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Build Unsigned App Package (.app)
+        run: |
+          cd ScheduleAppIOS
+          xcodebuild build \
+            -scheme ScheduleAppIOS \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package Unsigned .ipa
+        run: |
+          mkdir -p Payload
+          cp -R ScheduleAppIOS/build/Build/Products/Release-iphoneos/*.app Payload/
+          zip -r ScheduleApp_Unsigned.ipa Payload
+
+      - name: Upload .ipa Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScheduleApp_Unsigned_IPA
+          path: ScheduleApp_Unsigned.ipa
