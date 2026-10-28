@@ -1,0 +1,72 @@
+import SwiftUI
+import WidgetKit
+import UniformTypeIdentifiers
+
+// ==========================================
+// 1. DATA MODELS & APP GROUP STORAGE
+// ==========================================
+
+public struct LessonItem: Identifiable, Codable {
+    public var id = UUID()
+    public let topGroup: String   // e.g. "12", "11", "311"
+    public let dayOfWeek: String  // "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"
+    public let lessonNum: String  // "1", "2", "3"...
+    public let timeStart: String  // "09:00"
+    public let timeEnd: String    // "10:30"
+    public let subject: String    // Название предмета / Преподаватель
+    public let room: String       // Кабинет
+}
+
+public class ScheduleStorage {
+    public static let shared = ScheduleStorage()
+    
+    private let appGroupID = "group.com.top.schedule"
+    private let storageKey = "saved_lessons_key"
+    private let selectedGroupKey = "selected_group_key"
+    
+    private var sharedDefaults: UserDefaults? {
+        return UserDefaults(suiteName: appGroupID) ?? UserDefaults.standard
+    }
+    
+    public func saveLessons(_ lessons: [LessonItem]) {
+        if let encoded = try? JSONEncoder().encode(lessons) {
+            sharedDefaults?.set(encoded, forKey: storageKey)
+            WidgetCenter.shared.reloadAllTimelines()
+        }
+    }
+    
+    public func loadLessons() -> [LessonItem] {
+        guard let data = sharedDefaults?.data(forKey: storageKey),
+              let decoded = try? JSONEncoder().decode([LessonItem].self, from: data) else {
+            return []
+        }
+        return decoded
+    }
+    
+    public func saveSelectedGroup(_ group: String) {
+        sharedDefaults?.set(group, forKey: selectedGroupKey)
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+    
+    public func getSelectedGroup() -> String {
+        return sharedDefaults?.string(forKey: selectedGroupKey) ?? "12"
+    }
+    
+    public func getNextLesson() -> LessonItem? {
+        let currentGroup = getSelectedGroup()
+        let allLessons = loadLessons().filter { $0.topGroup == currentGroup }
+        
+        let calendar = Calendar.current
+        let now = Date()
+        let weekday = calendar.component(.weekday, from: now)
+        
+        let daysMap = [2: "ПН", 3: "ВТ", 4: "СР", 5: "ЧТ", 6: "ПТ", 7: "СБ"]
+        guard let todayStr = daysMap[weekday] else { return nil }
+        
+        let todayLessons = allLessons.filter { $0.dayOfWeek == todayStr }
+        
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        let currentTime = formatter.string(from: now)
+        
+        return todayLessons.first
